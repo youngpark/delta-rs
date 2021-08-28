@@ -2,7 +2,7 @@
 
 use crate::schema;
 use arrow::datatypes::{
-    DataType as ArrowDataType, Field as ArrowField, Schema as ArrowSchema, SchemaRef, TimeUnit,
+    DataType as ArrowDataType, Field as ArrowField, Schema as ArrowSchema, SchemaRef, TimeUnit, DateUnit,
 };
 use arrow::error::ArrowError;
 use lazy_static::lazy_static;
@@ -91,7 +91,7 @@ impl TryFrom<&schema::SchemaDataType> for ArrowDataType {
                     "date" => {
                         // A calendar date, represented as a year-month-day triple without a
                         // timezone.
-                        Ok(ArrowDataType::Date32)
+                        Ok(ArrowDataType::Date32(DateUnit::Day))
                     }
                     "timestamp" => {
                         // Issue: https://github.com/delta-io/delta/issues/643
