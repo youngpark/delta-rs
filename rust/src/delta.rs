@@ -564,10 +564,7 @@ impl DeltaTable {
                 .head_obj(&self.commit_uri_from_version(version))
                 .await
             {
-                Ok(meta) => {
-                    // also cache timestamp for version
-                    self.version_timestamp
-                        .insert(version, meta.modified.timestamp());
+                Ok(_) => {
                     version += 1;
                 }
                 Err(e) => {
@@ -716,11 +713,8 @@ impl DeltaTable {
         match self.version_timestamp.get(&version) {
             Some(ts) => Ok(*ts),
             None => {
-                let meta = self
-                    .storage
-                    .head_obj(&self.commit_uri_from_version(version))
-                    .await?;
-                let ts = meta.modified.timestamp();
+                let table = open_table_with_version(&*self.table_uri, version).await?;
+                let ts = get_max_timestamp(table.state.files(), table.state.tombstones());
                 // also cache timestamp for version
                 self.version_timestamp.insert(version, ts);
 
@@ -1046,7 +1040,7 @@ impl DeltaTable {
         let mut min_version = 0;
         let mut max_version = self.get_latest_version().await?;
         let mut version = min_version;
-        let target_ts = datetime.timestamp();
+        let target_ts = datetime.timestamp_millis();
 
         // binary search
         while min_version <= max_version {
@@ -1487,6 +1481,26 @@ pub async fn open_table_with_ds(table_uri: &str, ds: &str) -> Result<DeltaTable,
 /// Returns rust crate version, can be use used in language bindings to expose Rust core version
 pub fn crate_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
+}
+
+fn get_max_timestamp(add: &Vec<action::Add>, remove: &Vec<action::Remove>) -> i64 {
+    let max_add_timestamp = add
+        .iter()
+        .map(|r| r.modification_time.to_owned())
+        .collect::<Vec<i64>>()
+        .into_iter()
+        .max()
+        .unwrap_or(0);
+
+    let max_remove_timestamp = remove
+        .iter()
+        .map(|r| r.deletion_timestamp.to_owned())
+        .collect::<Vec<i64>>()
+        .into_iter()
+        .max()
+        .unwrap_or(0);
+
+    vec![max_add_timestamp, max_remove_timestamp].into_iter().max().unwrap()
 }
 
 #[cfg(test)]

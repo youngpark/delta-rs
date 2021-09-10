@@ -49,6 +49,14 @@ async fn read_delta_table_with_update() {
 }
 
 #[tokio::test]
+async fn read_delta_table_with_checkpoint_using_ds() {
+    let path = "./tests/data/simple_table_with_checkpoint/";
+    let table = deltalake::open_table_with_ds(path, "2021-03-14T19:55:17Z").await.unwrap();
+
+    assert_eq!(table.version, 10);
+}
+
+#[tokio::test]
 async fn read_delta_2_0_table_with_version() {
     let mut table = deltalake::open_table_with_version("./tests/data/delta-0.2.0", 0)
         .await
