@@ -210,6 +210,7 @@ impl<'a> TryFrom<&'a str> for DeltaTablePartition<'a> {
     }
 }
 
+#[cfg(feature = "parquet")]
 impl<'a> DeltaTablePartition<'a> {
     /// Try to create a DeltaTable partition from a partition value kv pair.
     pub fn from_partition_value(

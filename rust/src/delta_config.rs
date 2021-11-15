@@ -81,7 +81,7 @@ impl DeltaConfig {
             .configuration
             .get(&self.key)
             .and_then(|opt| opt.as_deref())
-            .unwrap_or_else(|| self.default.as_str())
+            .unwrap_or(self.default.as_str())
             .to_string()
     }
 }

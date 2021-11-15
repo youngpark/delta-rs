@@ -882,11 +882,25 @@ impl DeltaTable {
             .files()
             .iter()
             .filter(|add| {
+                #[cfg(feature = "parquet")]
                 let partitions = add
                     .partition_values
                     .iter()
                     .map(|p| DeltaTablePartition::from_partition_value(p, ""))
                     .collect::<Vec<DeltaTablePartition>>();
+
+                #[cfg(feature = "parquet2")]
+                let partitions = add
+                    .partition_values
+                    .0
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, key)| DeltaTablePartition {
+                        key,
+                        value: &add.partition_values.1[idx],
+                    })
+                    .collect::<Vec<DeltaTablePartition>>();
+
                 filters
                     .iter()
                     .all(|filter| filter.match_partitions(&partitions, &partition_col_data_types))
@@ -1373,14 +1387,31 @@ impl<'a> DeltaTransaction<'a> {
         bytes: &[u8],
         partitions: Option<Vec<(String, String)>>,
     ) -> Result<(), DeltaTableError> {
-        let mut partition_values = HashMap::new();
-        if let Some(partitions) = &partitions {
-            for (key, value) in partitions {
-                partition_values.insert(key.clone(), Some(value.clone()));
-            }
-        }
+        let path = self.generate_parquet_filename(&partitions);
 
-        let path = self.generate_parquet_filename(partitions);
+        #[cfg(feature = "parquet")]
+        let partition_values = {
+            let mut partition_values = HashMap::new();
+            if let Some(partitions) = &partitions {
+                for (key, value) in partitions {
+                    partition_values.insert(key.clone(), Some(value.clone()));
+                }
+            }
+            partition_values
+        };
+
+        #[cfg(feature = "parquet2")]
+        let partition_values = {
+            let mut partition_values = (vec![], vec![]);
+            if let Some(partitions) = partitions {
+                for (key, value) in partitions.into_iter() {
+                    partition_values.0.push(key);
+                    partition_values.1.push(value);
+                }
+            }
+            partition_values
+        };
+
         let parquet_uri = self
             .delta_table
             .storage
@@ -1412,7 +1443,7 @@ impl<'a> DeltaTransaction<'a> {
         Ok(())
     }
 
-    fn generate_parquet_filename(&self, partitions: Option<Vec<(String, String)>>) -> String {
+    fn generate_parquet_filename(&self, partitions: &Option<Vec<(String, String)>>) -> String {
         /*
          * The specific file naming for parquet is not well documented including the preceding five
          * zeros and the trailing c000 string
@@ -1642,7 +1673,7 @@ mod tests {
             (String::from("col1"), String::from("a")),
             (String::from("col2"), String::from("b")),
         ];
-        let parquet_filename = txn.generate_parquet_filename(Some(partitions));
+        let parquet_filename = txn.generate_parquet_filename(&Some(partitions));
         if cfg!(windows) {
             assert!(parquet_filename.contains("col1=a\\col2=b\\part-00000-"));
         } else {

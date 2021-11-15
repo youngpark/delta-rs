@@ -10,6 +10,7 @@ mod s3_common;
 mod fs_common;
 
 use deltalake::{action, DeltaTableError};
+#[cfg(feature = "parquet")]
 use std::collections::HashMap;
 
 use serial_test::serial;
@@ -211,7 +212,10 @@ fn tx1_actions() -> Vec<action::Action> {
                 "part-00000-b44fcdb0-8b06-4f3a-8606-f8311a96f6dc-c000.snappy.parquet",
             ),
             size: 396,
+            #[cfg(feature = "parquet")]
             partition_values: HashMap::new(),
+            #[cfg(feature = "parquet2")]
+            partition_values: (vec![], vec![]),
             partition_values_parsed: None,
             modification_time: 1564524294000,
             data_change: true,
@@ -224,7 +228,10 @@ fn tx1_actions() -> Vec<action::Action> {
                 "part-00001-185eca06-e017-4dea-ae49-fc48b973e37e-c000.snappy.parquet",
             ),
             size: 400,
+            #[cfg(feature = "parquet")]
             partition_values: HashMap::new(),
+            #[cfg(feature = "parquet2")]
+            partition_values: (vec![], vec![]),
             partition_values_parsed: None,
             modification_time: 1564524294000,
             data_change: true,
@@ -242,7 +249,10 @@ fn tx2_actions() -> Vec<action::Action> {
                 "part-00000-512e1537-8aaa-4193-b8b4-bef3de0de409-c000.snappy.parquet",
             ),
             size: 396,
+            #[cfg(feature = "parquet")]
             partition_values: HashMap::new(),
+            #[cfg(feature = "parquet2")]
+            partition_values: (vec![], vec![]),
             partition_values_parsed: None,
             modification_time: 1564524296000,
             data_change: true,
@@ -255,7 +265,10 @@ fn tx2_actions() -> Vec<action::Action> {
                 "part-00001-4327c977-2734-4477-9507-7ccf67924649-c000.snappy.parquet",
             ),
             size: 400,
+            #[cfg(feature = "parquet")]
             partition_values: HashMap::new(),
+            #[cfg(feature = "parquet2")]
+            partition_values: (vec![], vec![]),
             partition_values_parsed: None,
             modification_time: 1564524296000,
             data_change: true,

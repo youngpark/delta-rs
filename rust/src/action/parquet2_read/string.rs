@@ -6,8 +6,8 @@ use parquet2::schema::types::ParquetType;
 use parquet2::schema::types::PhysicalType;
 use parquet2::schema::types::PrimitiveConvertedType;
 
-use super::validity::ValidityRowIndexIter;
-use super::{split_page, ActionVariant, ParseError};
+use super::validity::{ValidityRepeatedRowIndexIter, ValidityRowIndexIter};
+use super::{split_page, split_page_nested, ActionVariant, ParseError};
 use crate::action::Action;
 
 /// Parquet string value reader
@@ -45,6 +45,91 @@ impl<'a> Iterator for SomeStringValueIter<'a> {
     }
 }
 
+/// Parquet repeated string value reader
+pub struct SomeRepeatedStringValueIter<'a> {
+    repeated_row_idx_iter: ValidityRepeatedRowIndexIter<'a>,
+    values_buffer: &'a [u8],
+}
+
+impl<'a> SomeRepeatedStringValueIter<'a> {
+    /// Create parquet string value reader
+    pub fn new(page: &'a DataPage, descriptor: &'a ColumnDescriptor) -> Self {
+        let (max_rep_level, rep_iter, max_def_level, validity_iter, values_buffer) =
+            split_page_nested(page, descriptor);
+        let repeated_row_idx_iter = ValidityRepeatedRowIndexIter::new(
+            max_rep_level,
+            rep_iter,
+            max_def_level,
+            validity_iter,
+        );
+        Self {
+            values_buffer,
+            repeated_row_idx_iter,
+        }
+    }
+}
+
+impl<'a> Iterator for SomeRepeatedStringValueIter<'a> {
+    type Item = (usize, Vec<String>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.repeated_row_idx_iter.next().map(|(idx, item_count)| {
+            let strings = (0..item_count)
+                .map(|_| {
+                    let bytes_len = parquet2::encoding::get_length(self.values_buffer) as usize;
+                    let bytes_end = bytes_len + 4;
+                    // skip first 4 bytes (length)
+                    let bytes = &self.values_buffer[4..bytes_end];
+                    self.values_buffer = &self.values_buffer[bytes_end..];
+
+                    let value = std::str::from_utf8(bytes).unwrap().to_string();
+
+                    value
+                })
+                .collect();
+
+            (idx, strings)
+        })
+    }
+}
+
+#[inline]
+pub fn for_each_repeated_string_field_value<ActType, SetFn>(
+    actions: &mut Vec<Option<Action>>,
+    page: &DataPage,
+    descriptor: &ColumnDescriptor,
+    set_fn: SetFn,
+) -> Result<(), ParseError>
+where
+    ActType: ActionVariant,
+    SetFn: Fn((&mut ActType, Vec<String>)),
+{
+    if let ParquetType::PrimitiveType {
+        physical_type,
+        converted_type,
+        logical_type,
+        ..
+    } = descriptor.type_()
+    {
+        match (physical_type, converted_type, logical_type) {
+            (PhysicalType::ByteArray, Some(PrimitiveConvertedType::Utf8), _) => {}
+            _ => {
+                return Err(ParseError::InvalidAction(format!(
+                    "expect parquet utf8 type, got physical type: {:?}, converted type: {:?}",
+                    physical_type, converted_type
+                )));
+            }
+        }
+    }
+
+    let some_value_iter = SomeRepeatedStringValueIter::new(page, descriptor);
+    for (idx, strings) in some_value_iter {
+        let a = actions[idx].get_or_insert_with(ActType::default_action);
+        set_fn((ActType::try_mut_from_action(a)?, strings));
+    }
+    Ok(())
+}
+
 #[inline]
 pub fn for_each_string_field_value<ActType, SetFn>(
     actions: &mut Vec<Option<Action>>,
@@ -54,7 +139,7 @@ pub fn for_each_string_field_value<ActType, SetFn>(
 ) -> Result<(), ParseError>
 where
     ActType: ActionVariant,
-    SetFn: Fn((&mut ActType, String)) -> (),
+    SetFn: Fn((&mut ActType, String)),
 {
     if let ParquetType::PrimitiveType {
         physical_type,

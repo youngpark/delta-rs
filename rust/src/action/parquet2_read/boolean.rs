@@ -49,7 +49,7 @@ pub fn for_each_boolean_field_value<ActType, SetFn>(
 ) -> Result<(), ParseError>
 where
     ActType: ActionVariant,
-    SetFn: Fn((&mut ActType, bool)) -> (),
+    SetFn: Fn((&mut ActType, bool)),
 {
     if let ParquetType::PrimitiveType { physical_type, .. } = descriptor.type_() {
         if physical_type != &PhysicalType::Boolean {

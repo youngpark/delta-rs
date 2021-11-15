@@ -142,7 +142,7 @@ pub fn for_each_primitive_field_value<T, ActType, SetFn>(
 where
     T: NativeType,
     ActType: ActionVariant,
-    SetFn: Fn((&mut ActType, T)) -> (),
+    SetFn: Fn((&mut ActType, T)),
 {
     if let ParquetType::PrimitiveType { physical_type, .. } = descriptor.type_() {
         if physical_type != &T::TYPE {

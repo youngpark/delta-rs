@@ -1,5 +1,7 @@
 //! Parquet deserialization for Action enum
 
+use std::collections::HashMap;
+
 use parquet2::encoding::hybrid_rle;
 use parquet2::metadata::ColumnDescriptor;
 use parquet2::page::DataPage;
@@ -8,6 +10,7 @@ use parquet2::read::get_page_iterator;
 use parquet2::read::levels::get_bit_width;
 
 mod boolean;
+mod map;
 mod primitive;
 mod string;
 mod validity;
@@ -17,8 +20,9 @@ use crate::schema::{
     DeltaDataTypeInt, DeltaDataTypeLong, DeltaDataTypeTimestamp, DeltaDataTypeVersion, Guid,
 };
 use boolean::for_each_boolean_field_value;
+use map::for_each_map_field_value;
 use primitive::for_each_primitive_field_value;
-use string::for_each_string_field_value;
+use string::{for_each_repeated_string_field_value, for_each_string_field_value};
 
 /// Parquet deserilization error
 #[derive(thiserror::Error, Debug)]
@@ -50,6 +54,36 @@ fn split_page<'a>(
         hybrid_rle::HybridRleDecoder::new(def_levels, def_bit_width, page.num_values());
 
     (max_def_level, validity_iter, values_buffer)
+}
+
+fn split_page_nested<'a>(
+    page: &'a DataPage,
+    descriptor: &'a ColumnDescriptor,
+) -> (
+    i16,
+    hybrid_rle::HybridRleDecoder<'a>,
+    i16,
+    hybrid_rle::HybridRleDecoder<'a>,
+    &'a [u8],
+) {
+    let (rep_levels, def_levels, values_buffer) = parquet2::page::split_buffer(page, descriptor);
+
+    let max_rep_level = descriptor.max_rep_level();
+    let rep_bit_width = get_bit_width(max_rep_level);
+    let rep_iter = hybrid_rle::HybridRleDecoder::new(rep_levels, rep_bit_width, page.num_values());
+
+    let max_def_level = descriptor.max_def_level();
+    let def_bit_width = get_bit_width(max_def_level);
+    let validity_iter =
+        hybrid_rle::HybridRleDecoder::new(def_levels, def_bit_width, page.num_values());
+
+    (
+        max_rep_level,
+        rep_iter,
+        max_def_level,
+        validity_iter,
+        values_buffer,
+    )
 }
 
 /// Trait for conversion between concrete action struct and Action enum variant
@@ -167,7 +201,7 @@ fn deserialize_txn_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Txn, DeltaDataTypeVersion)| -> () { action.version = v },
+                |(action, v): (&mut Txn, DeltaDataTypeVersion)| action.version = v,
             )?;
         }
         "appId" => {
@@ -175,7 +209,7 @@ fn deserialize_txn_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Txn, String)| -> () { action.app_id = v },
+                |(action, v): (&mut Txn, String)| action.app_id = v,
             )?;
         }
         "lastUpdated" => {
@@ -183,9 +217,7 @@ fn deserialize_txn_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Txn, DeltaDataTypeTimestamp)| -> () {
-                    action.last_updated = Some(v)
-                },
+                |(action, v): (&mut Txn, DeltaDataTypeTimestamp)| action.last_updated = Some(v),
             )?;
         }
         _ => {
@@ -211,7 +243,7 @@ fn deserialize_add_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Add, String)| -> () { action.path = v },
+                |(action, v): (&mut Add, String)| action.path = v,
             )?;
         }
         "size" => {
@@ -219,29 +251,59 @@ fn deserialize_add_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Add, DeltaDataTypeLong)| -> () { action.size = v },
+                |(action, v): (&mut Add, DeltaDataTypeLong)| action.size = v,
             )?;
         }
         "partitionValues" => {
-            // FIXME: support map
+            assert!(field[1] == "key_value");
+            match field[2].as_str() {
+                "key" => {
+                    for_each_repeated_string_field_value(
+                        actions,
+                        page,
+                        descriptor,
+                        |(action, strings): (&mut Add, Vec<String>)| {
+                            action.partition_values.0 = strings;
+                        },
+                    )?;
+                }
+                "value" => {
+                    for_each_repeated_string_field_value(
+                        actions,
+                        page,
+                        descriptor,
+                        |(action, strings): (&mut Add, Vec<String>)| {
+                            action.partition_values.1 = strings;
+                        },
+                    )?;
+                }
+                _ => todo!("FIXME"),
+            }
         }
+        // FIXME suport partitionValueParsed
         "dataChange" => {
             for_each_boolean_field_value(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Add, bool)| -> () { action.data_change = v },
+                |(action, v): (&mut Add, bool)| action.data_change = v,
             )?;
         }
         "tags" => {
-            // FIXME: support map
+            for_each_map_field_value(
+                actions,
+                page,
+                descriptor,
+                |(action, v): (&mut Add, HashMap<String, Option<String>>)| action.tags = Some(v),
+            )?;
         }
+        // FIXME: support statsParsed
         "stats" => {
             for_each_string_field_value(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Add, String)| -> () { action.stats = Some(v) },
+                |(action, v): (&mut Add, String)| action.stats = Some(v),
             )?;
         }
         "modificationTime" => {
@@ -249,9 +311,7 @@ fn deserialize_add_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Add, DeltaDataTypeTimestamp)| -> () {
-                    action.modification_time = v
-                },
+                |(action, v): (&mut Add, DeltaDataTypeTimestamp)| action.modification_time = v,
             )?;
         }
         _ => {
@@ -277,7 +337,7 @@ fn deserialize_remove_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Remove, String)| -> () { action.path = v },
+                |(action, v): (&mut Remove, String)| action.path = v,
             )?;
         }
         "deletionTimestamp" => {
@@ -285,7 +345,7 @@ fn deserialize_remove_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Remove, DeltaDataTypeTimestamp)| -> () {
+                |(action, v): (&mut Remove, DeltaDataTypeTimestamp)| {
                     action.deletion_timestamp = Some(v)
                 },
             )?;
@@ -295,18 +355,26 @@ fn deserialize_remove_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Remove, DeltaDataTypeLong)| -> () { action.size = Some(v) },
+                |(action, v): (&mut Remove, DeltaDataTypeLong)| action.size = Some(v),
             )?;
         }
+        // FIXME suport partitionValueParsed
         "partitionValues" => {
-            // FIXME: support map
+            for_each_map_field_value(
+                actions,
+                page,
+                descriptor,
+                |(action, v): (&mut Remove, HashMap<String, Option<String>>)| {
+                    action.partition_values = Some(v)
+                },
+            )?;
         }
         "dataChange" => {
             for_each_boolean_field_value(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Remove, bool)| -> () { action.data_change = v },
+                |(action, v): (&mut Remove, bool)| action.data_change = v,
             )?;
         }
         "extendedFileMetadata" => {
@@ -314,13 +382,16 @@ fn deserialize_remove_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Remove, bool)| -> () {
-                    action.extended_file_metadata = Some(v)
-                },
+                |(action, v): (&mut Remove, bool)| action.extended_file_metadata = Some(v),
             )?;
         }
         "tags" => {
-            // FIXME: support map
+            for_each_map_field_value(
+                actions,
+                page,
+                descriptor,
+                |(action, v): (&mut Remove, HashMap<String, Option<String>>)| action.tags = Some(v),
+            )?;
         }
         _ => {
             return Err(ParseError::InvalidAction(format!(
@@ -345,7 +416,7 @@ fn deserialize_metadata_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut MetaData, Guid)| -> () { action.id = v },
+                |(action, v): (&mut MetaData, Guid)| action.id = v,
             )?;
         }
         "name" => {
@@ -353,7 +424,7 @@ fn deserialize_metadata_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut MetaData, String)| -> () { action.name = Some(v) },
+                |(action, v): (&mut MetaData, String)| action.name = Some(v),
             )?;
         }
         "description" => {
@@ -361,7 +432,7 @@ fn deserialize_metadata_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut MetaData, String)| -> () { action.description = Some(v) },
+                |(action, v): (&mut MetaData, String)| action.description = Some(v),
             )?;
         }
         "format" => {
@@ -372,11 +443,18 @@ fn deserialize_metadata_column_page(
                         actions,
                         page,
                         descriptor,
-                        |(action, v): (&mut MetaData, String)| -> () { action.format.provider = v },
+                        |(action, v): (&mut MetaData, String)| action.format.provider = v,
                     )?;
                 }
                 "options" => {
-                    // FIXME: parse map
+                    for_each_map_field_value(
+                        actions,
+                        page,
+                        descriptor,
+                        |(action, v): (&mut MetaData, HashMap<String, Option<String>>)| {
+                            action.format.options = v
+                        },
+                    )?;
                 }
                 _ => {
                     return Err(ParseError::InvalidAction(format!(
@@ -391,7 +469,7 @@ fn deserialize_metadata_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut MetaData, String)| -> () { action.schema_string = v },
+                |(action, v): (&mut MetaData, String)| action.schema_string = v,
             )?;
         }
         "partitionColumns" => {
@@ -402,13 +480,20 @@ fn deserialize_metadata_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut MetaData, DeltaDataTypeTimestamp)| -> () {
+                |(action, v): (&mut MetaData, DeltaDataTypeTimestamp)| {
                     action.created_time = Some(v)
                 },
             )?;
         }
         "configuration" => {
-            // FIXME: parse map
+            for_each_map_field_value(
+                actions,
+                page,
+                descriptor,
+                |(action, v): (&mut MetaData, HashMap<String, Option<String>>)| {
+                    action.configuration = v
+                },
+            )?;
         }
         _ => {
             return Err(ParseError::InvalidAction(format!(
@@ -433,9 +518,7 @@ fn deserialize_protocol_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Protocol, DeltaDataTypeInt)| -> () {
-                    action.min_reader_version = v
-                },
+                |(action, v): (&mut Protocol, DeltaDataTypeInt)| action.min_reader_version = v,
             )?;
         }
         "minWriterVersion" => {
@@ -443,9 +526,7 @@ fn deserialize_protocol_column_page(
                 actions,
                 page,
                 descriptor,
-                |(action, v): (&mut Protocol, DeltaDataTypeInt)| -> () {
-                    action.min_writer_version = v
-                },
+                |(action, v): (&mut Protocol, DeltaDataTypeInt)| action.min_writer_version = v,
             )?;
         }
         _ => {
@@ -509,7 +590,7 @@ pub fn actions_from_row_group<R: std::io::Read + std::io::Seek>(
 
         // FIXME: reuse buffer?
         let buffer = Vec::new();
-        let pages = get_page_iterator(column_metadata, reader, None, buffer)?;
+        let pages = get_page_iterator(column_metadata, &mut *reader, None, buffer)?;
 
         let mut decompress_buffer = vec![];
         for maybe_page in pages {
@@ -540,7 +621,7 @@ mod tests {
             let actions = actions_from_row_group(row_group, &mut reader).unwrap();
             match &actions[9] {
                 Action::add(add_action) => {
-                    assert_eq!(add_action.partition_values.len(), 0);
+                    assert_eq!(add_action.partition_values.0.len(), 0);
                     assert_eq!(add_action.stats, None);
                 }
                 _ => panic!("expect add action"),

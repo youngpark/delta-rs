@@ -103,7 +103,10 @@ impl Worker {
         tx.add_action(action::Action::add(action::Add {
             path: format!("{}.parquet", name),
             size: 396,
+            #[cfg(feature = "parquet")]
             partition_values: HashMap::new(),
+            #[cfg(feature = "parquet2")]
+            partition_values: (vec![], vec![]),
             partition_values_parsed: None,
             modification_time: 1564524294000,
             data_change: true,

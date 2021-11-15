@@ -93,7 +93,7 @@ impl DeltaTableState {
 
                 for row_group in metadata.row_groups {
                     for action in actions_from_row_group(row_group, &mut reader)
-                        .map_err(|e| action::ActionError::from(e))?
+                        .map_err(action::ActionError::from)?
                     {
                         new_state.process_action(action, require_tombstones)?;
                     }

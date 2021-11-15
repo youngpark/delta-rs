@@ -75,9 +75,7 @@ fn decode_path(raw_path: &str) -> Result<String, ActionError> {
     percent_decode(raw_path.as_bytes())
         .decode_utf8()
         .map(|c| c.to_string())
-        .map_err(|e| {
-            ActionError::InvalidField(format!("Decode path failed for action: {}", e.to_string(),))
-        })
+        .map_err(|e| ActionError::InvalidField(format!("Decode path failed for action: {}", e)))
 }
 
 /// Struct used to represent minValues and maxValues in add action statistics.
@@ -185,7 +183,12 @@ pub struct Add {
     /// The size of this file in bytes
     pub size: DeltaDataTypeLong,
     /// A map from partition column to value for this file
+    #[cfg(feature = "parquet")]
     pub partition_values: HashMap<String, Option<String>>,
+    /// A map from partition column to value for this file
+    #[cfg(feature = "parquet2")]
+    // FIXME: is this the best way to store hashmap?
+    pub partition_values: (Vec<String>, Vec<String>),
     /// Partition values stored in raw parquet struct format. In this struct, the column names
     /// correspond to the partition columns and the values are stored in their corresponding data
     /// type. This is a required field when the table is partitioned and the table property
