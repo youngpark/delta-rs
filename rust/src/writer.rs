@@ -169,7 +169,7 @@ impl ParquetBuffer {
         self.cursor.data()
     }
 
-    fn close(&mut self) -> Result<(), DeltaTableError> {
+    fn close(&mut self) -> Result<parquet_format::FileMetaData, DeltaTableError> {
         self.writer
             .close()
             .map_err(|source| DeltaTableError::ParquetError { source })
