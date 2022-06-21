@@ -44,9 +44,9 @@ maplit = { version = "1", optional = true }
 # High-level writer
 parquet-format = "~4.0.0"
 
-arrow  = { version = "8" }
+arrow  = { git = "https://github.com/anliakho2/arrow-rs", branch = "fixRleBitpackedRead" }
 datafusion = { version = "4", optional = true }
-parquet = { version = "8" }
+parquet = { git = "https://github.com/anliakho2/arrow-rs", branch = "fixRleBitpackedRead" , features = ['experimental'] }
 cfg-if = "1"
 async-trait = "0.1"
 # NOTE: disable rust-dataframe integration since it currently doesn't have a
