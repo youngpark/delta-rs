@@ -237,7 +237,7 @@ impl CheckPointWriter {
             + state.tombstones().len()
             + state.files().len()
             + 2; // 1 (protocol) + 1 (metadata)
-        let decoder = Decoder::new(arrow_schema, batch_size, None);
+        let decoder = Decoder::new(arrow_schema, batch_size, Default::default());
         while let Some(batch) = decoder.next_batch(&mut jsons)? {
             writer.write(&batch)?;
         }

@@ -99,7 +99,7 @@ impl BufferedJsonWriter {
         for (partitions, values) in self.buffer.iter() {
             let count = self.count(&partitions).unwrap_or(0);
             let mut value_iter = InMemValueIter::from_vec(&values);
-            let decoder = Decoder::new(self.schema.clone(), count, None);
+            let decoder = Decoder::new(self.schema.clone(), count, Default::default());
 
             let record_batch = decoder
                 .next_batch(&mut value_iter)
