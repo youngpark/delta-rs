@@ -3,7 +3,7 @@ mod platform_cfg {
     fn detect_glibc_renameat2() {
         // we should never fail on version parsing when the target is linux + glibc
         let ver = glibc_version::get_version().unwrap();
-        if ver.major >= 2 && ver.minor > 28 {
+        if ver.major >= 2 && ver.minor >= 28 {
             println!("cargo:rustc-cfg=glibc_renameat2");
         }
     }

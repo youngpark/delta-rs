@@ -52,7 +52,7 @@ mod imp {
                     if #[cfg(glibc_renameat2)] {
                         libc::renameat2(libc::AT_FDCWD, from, libc::AT_FDCWD, to, libc::RENAME_NOREPLACE)
                     } else {
-                        // target has old glibc (<= 2.28), we would need to invoke syscall manually
+                        // target has old glibc (< 2.28), we would need to invoke syscall manually
                         unimplemented!()
                     }
                 }
