@@ -50,7 +50,8 @@ mod imp {
             if #[cfg(all(target_os = "linux", target_env = "gnu"))] {
                 cfg_if::cfg_if! {
                     if #[cfg(glibc_renameat2)] {
-                        libc::renameat2(libc::AT_FDCWD, from, libc::AT_FDCWD, to, libc::RENAME_NOREPLACE)
+                        // libc::renameat2(libc::AT_FDCWD, from, libc::AT_FDCWD, to, libc::RENAME_NOREPLACE)
+                        unimplemented!()
                     } else {
                         // target has old glibc (< 2.28), we would need to invoke syscall manually
                         unimplemented!()
