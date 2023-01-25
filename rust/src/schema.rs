@@ -1,6 +1,7 @@
 #![allow(non_snake_case, non_camel_case_types)]
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 
 /// Type alias for a string expected to match a GUID/UUID format
@@ -40,7 +41,7 @@ pub struct SchemaField {
     nullable: bool,
     // A JSON map containing information about this column. Keys prefixed with Delta are reserved
     // for the implementation.
-    metadata: HashMap<String, String>,
+    metadata: HashMap<String, Value>,
 }
 
 impl SchemaField {
@@ -60,7 +61,7 @@ impl SchemaField {
     }
 
     /// Additional metadata about the column/field.
-    pub fn get_metadata(&self) -> &HashMap<String, String> {
+    pub fn get_metadata(&self) -> &HashMap<String, Value> {
         &self.metadata
     }
 }
