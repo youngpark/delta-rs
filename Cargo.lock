@@ -79,12 +79,12 @@ dependencies = [
 [[package]]
 name = "arrow"
 version = "11.1.0"
-source = "git+https://github.com/anliakho2/arrow-rs?branch=fixRleBitpackedRead#cf2478660a6122c5c05b2e2695e115b97d435676"
+source = "git+https://github.com/anliakho2/arrow-rs?rev=d2cc88c#d2cc88ce7f036063347a3c2f0deab2364bc7992f"
 dependencies = [
  "bitflags",
  "chrono",
  "csv",
- "flatbuffers 2.1.1",
+ "flatbuffers 2.1.2",
  "half",
  "hex",
  "indexmap",
@@ -571,9 +571,9 @@ dependencies = [
 
 [[package]]
 name = "flatbuffers"
-version = "2.1.1"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ea97b4fe4b84e2f2765449bcea21cbdb3ee28cecb88afbf38a0c2e1639f5eb5"
+checksum = "86b428b715fdbdd1c364b84573b5fdc0f84f8e423661b9f398735278bc7f2b6a"
 dependencies = [
  "bitflags",
  "smallvec",
@@ -1547,7 +1547,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "11.1.0"
-source = "git+https://github.com/anliakho2/arrow-rs?branch=fixRleBitpackedRead#cf2478660a6122c5c05b2e2695e115b97d435676"
+source = "git+https://github.com/anliakho2/arrow-rs?rev=d2cc88c#d2cc88ce7f036063347a3c2f0deab2364bc7992f"
 dependencies = [
  "arrow 11.1.0",
  "base64",
